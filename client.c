@@ -10,6 +10,20 @@
 #define DEFAULT_DOMAIN "localhost"
 #define BUFFER_SIZE 1024
 
+static int send_all(int sock, const char *data, size_t length) {
+	size_t sent_total = 0;
+
+	while (sent_total < length) {
+		ssize_t sent = send(sock, data + sent_total, length - sent_total, 0);
+		if (sent <= 0) {
+			return -1;
+		}
+		sent_total += (size_t)sent;
+	}
+
+	return 0;
+}
+
 int main(int argc, char *argv[]) {
 	int sock = 0;
 	struct sockaddr_in serv_addr;
@@ -134,7 +148,8 @@ int main(int argc, char *argv[]) {
 			// - cadena: és el punter a les dades que volem enviar.
 			// - strlen(cadena): és la mida exacta en bytes a enviar de cadena.
 
-			if(send(sock, cadena, strlen(cadena), 0)<0){
+			if (send_all(sock, cadena, strlen(cadena)) < 0 ||
+				send_all(sock, "\n", 1) < 0) {
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
 				return 1;
@@ -169,7 +184,11 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case 2:
-			send(sock, "CARTELLERA\n",11,0);
+			if (send_all(sock, "CARTELLERA\n", 11) < 0) {
+				printf("Error en enviar dades al servidor \n");
+				close(sock);
+				return 1;
+			}
 
 			memset(buffer, 0, BUFFER_SIZE);
   		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
@@ -182,15 +201,20 @@ int main(int argc, char *argv[]) {
    			 break;
 	
 
-		case 3:
+		case 3: {
 			char id[50];
 			printf("Introdueix l'ID de la pel·lícula: ");
-			scanf("%s", id);
+			scanf("%49s", id);
 			while (getchar() != '\n');
 
-			send(sock, "HORARIS|",8,0);
-			send(sock,id,strlen(id),0);
-			send(sock,"\n",1,0);
+			int request_length = snprintf(send_buffer, sizeof(send_buffer),
+				"HORARIS|%s\n", id);
+			if (request_length < 0 || (size_t)request_length >= sizeof(send_buffer) ||
+				send_all(sock, send_buffer, (size_t)request_length) < 0) {
+				printf("Error en enviar dades al servidor \n");
+				close(sock);
+				return 1;
+			}
 			memset(buffer, 0, BUFFER_SIZE);
   		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
        			 printf("Resposta del servidor: %s\n", buffer);
@@ -200,6 +224,7 @@ int main(int argc, char *argv[]) {
        			 fflush(stdout);
    				 }
 			break;
+		}
 
 		case 4:
 			

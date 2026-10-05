@@ -10,6 +10,37 @@
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 
+static int recv_line(int sock, char *buffer, size_t size) {
+	size_t received = 0;
+
+	if (size == 0) {
+		return -1;
+	}
+
+	while (received < size - 1) {
+		char character;
+		ssize_t result = recv(sock, &character, 1, 0);
+
+		if (result < 0) {
+			return -1;
+		}
+		if (result == 0) {
+			if (received == 0) {
+				return 0;
+			}
+			break;
+		}
+		if (character == '\n') {
+			break;
+		}
+
+		buffer[received++] = character;
+	}
+
+	buffer[received] = '\0';
+	return 1;
+}
+
 int main(int argc, char *argv[]) {
 	int sock, new_socket;
 	struct sockaddr_in address;
@@ -123,7 +154,7 @@ int main(int argc, char *argv[]) {
 			memset(buffer, 0, BUFFER_SIZE);
 			
 			// Llegir missatge del client
-			if (recv(new_socket, buffer, BUFFER_SIZE-1, 0) <= 0) {
+			if (recv_line(new_socket, buffer, BUFFER_SIZE) <= 0) {
 				printf("Client desconnectat (PID: %d)\n", getpid());
 				break;
 			}
@@ -162,12 +193,13 @@ int main(int argc, char *argv[]) {
 				send(new_socket, "OK|1:Inception|2:Interstellar \n",32,0); // Enviar resposta al client 
 			} else if (strcmp(comando, "HORARIS")==0){ 
 				char *id_peli =strtok(NULL,"|"); // Obtenir l'argument de la comanda HORARIS
-				if(id_peli != NULL){
+				
+				if(id_peli == "1" || id_peli == "2"){ // Comprovar si l'ID de la pel·lícula és vàlid
 					char resposta[BUFFER_SIZE];
-        			snprintf(resposta, sizeof(resposta), "OK|%s|16:30|19:45\n", id_peli);
+        			snprintf(resposta, sizeof(resposta), "OK|%s|16|19:30|22\n", id_peli);
        				send(new_socket, resposta, strlen(resposta), 0);
 				}else{
-					send(new_socket,"ERR|Falta ID\n",13,0);
+					send(new_socket,"ERR|ID no vàlid \n",13,0);
 				}
 			} 
 		}
