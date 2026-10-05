@@ -190,16 +190,28 @@ int main(int argc, char *argv[]) {
 
 
 			if(strcmp(comando, "CARTELLERA")==0){  // Comprovar si la comanda és CARTELLERA
-				send(new_socket, "OK|1:Inception|2:Interstellar \n",32,0); // Enviar resposta al client 
+				send(new_socket, "OK|1:Inception|2:Interstellar|3:Dark Knight|4:Avatar \n",64,0); // Enviar resposta al client 
 			} else if (strcmp(comando, "HORARIS")==0){ 
 				char *id_peli =strtok(NULL,"|"); // Obtenir l'argument de la comanda HORARIS
 				
-				if(id_peli == "1" || id_peli == "2"){ // Comprovar si l'ID de la pel·lícula és vàlid
+				if(strcmp(id_peli, "1") == 0){ // Comprovar si l'ID de la pel·lícula és vàlid
 					char resposta[BUFFER_SIZE];
-        			snprintf(resposta, sizeof(resposta), "OK|%s|16|19:30|22\n", id_peli);
+        			snprintf(resposta, sizeof(resposta), "OK|1|16:00|19:30|22:00\n");
        				send(new_socket, resposta, strlen(resposta), 0);
-				}else{
-					send(new_socket,"ERR|ID no vàlid \n",13,0);
+				}else if (strcmp(id_peli, "2") == 0) {
+					char resposta[BUFFER_SIZE];
+        			snprintf(resposta, sizeof(resposta), "OK|2|16:00|18:30\n");
+       				send(new_socket, resposta, strlen(resposta), 0);
+				} else if(strcmp(id_peli, "3") == 0) {
+					char resposta[BUFFER_SIZE];
+        			snprintf(resposta, sizeof(resposta), "OK|3|16:00|20:00|23:00\n");
+       				send(new_socket, resposta, strlen(resposta), 0);
+				} else if(strcmp(id_peli, "4") == 0) {
+					char resposta[BUFFER_SIZE];
+        			snprintf(resposta, sizeof(resposta), "OK|4|19:30|22:00\n");
+       				send(new_socket, resposta, strlen(resposta), 0);
+				} else {
+					send(new_socket,"ERR|ID no vàlid \n",32,0);
 				}
 			} 
 		}
