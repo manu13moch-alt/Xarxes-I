@@ -197,7 +197,38 @@ int main(int argc, char *argv[]) {
 				}else {
 					send(new_socket, "ERR|Falta ID\n",13,0);
 				}
-			} 
+			} else if (strcmp(comando, "PREU")==0){
+				char *tipus_client = strtok(NULL, "|");
+				char *quantitat_text = strtok(NULL, "|");
+				int quantitat;
+				int preu;
+
+				if (tipus_client == NULL || quantitat_text == NULL) {
+					send(new_socket, "ERR|Falta tipus o quantitat\n", 28, 0);
+					continue;
+				}
+
+				if (strcmp(tipus_client, "adult") == 0) {
+					preu = 10;
+				} else if (strcmp(tipus_client, "jove") == 0) {
+					preu = 6;
+				} else if (strcmp(tipus_client, "jubilat") == 0) {
+					preu = 7;
+				} else {
+					send(new_socket, "ERR|Tipus de client no valid\n", 29, 0);
+					continue;
+				}
+
+				quantitat = atoi(quantitat_text);
+				if (quantitat <= 0) {
+					send(new_socket, "ERR|Quantitat no valida\n", 24, 0);
+					continue;
+				}
+
+				snprintf(resposta, sizeof(resposta), "OK|Total: %d euros\n",
+					preu * quantitat);
+				send(new_socket, resposta, strlen(resposta), 0);
+			}
 		}
 		
 

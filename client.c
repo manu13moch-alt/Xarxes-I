@@ -251,9 +251,42 @@ int main(int argc, char *argv[]) {
 			
 			break;
 
-		case 5:
-			
+		case 5: {
+			char tipus_client[50];
+			int quantitat;
+			int request_length;
+
+			printf("Tipus de client (adult, jove o jubilat): ");
+			if (scanf("%49s", tipus_client) != 1) {
+				printf("No s'ha pogut llegir el tipus de client.\n");
+				break;
+			}
+			printf("Nombre d'entrades: ");
+			if (scanf("%d", &quantitat) != 1) {
+				printf("La quantitat ha de ser un nombre enter.\n");
+				while (getchar() != '\n' && !feof(stdin));
+				break;
+			}
+			while (getchar() != '\n' && !feof(stdin));
+
+			request_length = snprintf(send_buffer, sizeof(send_buffer),
+				"PREU|%s|%d\n", tipus_client, quantitat);
+			if (request_length < 0 ||
+				(size_t)request_length >= sizeof(send_buffer) ||
+				send_all(sock, send_buffer, (size_t)request_length) < 0) {
+				printf("Error en enviar dades al servidor.\n");
+				close(sock);
+				return 1;
+			}
+
+			memset(buffer, 0, sizeof(buffer));
+			if (recv(sock, buffer, sizeof(buffer) - 1, 0) > 0) {
+				printf("Resposta del servidor: %s", buffer);
+			} else {
+				printf("Error en rebre el preu del servidor.\n");
+			}
 			break;
+		}
 
 		default:
 			printf("Opció invàlida\n");
