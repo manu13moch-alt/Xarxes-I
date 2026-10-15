@@ -10,37 +10,6 @@
 #define DEFAULT_PORT 8080
 #define BUFFER_SIZE 1024
 
-static int recv_line(int sock, char *buffer, size_t size) {
-	size_t received = 0;
-
-	if (size == 0) {
-		return -1;
-	}
-
-	while (received < size - 1) {
-		char character;
-		ssize_t result = recv(sock, &character, 1, 0);
-
-		if (result < 0) {
-			return -1;
-		}
-		if (result == 0) {
-			if (received == 0) {
-				return 0;
-			}
-			break;
-		}
-		if (character == '\n') {
-			break;
-		}
-
-		buffer[received++] = character;
-	}
-
-	buffer[received] = '\0';
-	return 1;
-}
-
 int main(int argc, char *argv[]) {
 	int sock, new_socket;
 	struct sockaddr_in address;
@@ -154,7 +123,7 @@ int main(int argc, char *argv[]) {
 			memset(buffer, 0, BUFFER_SIZE);
 			
 			// Llegir missatge del client
-			if (recv_line(new_socket, buffer, BUFFER_SIZE) <= 0) {
+			if (recv(new_socket, buffer, BUFFER_SIZE-1, 0) <= 0) {
 				printf("Client desconnectat (PID: %d)\n", getpid());
 				break;
 			}
@@ -212,6 +181,21 @@ int main(int argc, char *argv[]) {
        				send(new_socket, resposta, strlen(resposta), 0);
 				} else {
 					send(new_socket,"ERR|ID no vàlid \n",32,0);
+				}
+			} else if (strcmp (comando, "AFORAMENT")==0){
+				char *id_peli =strtok(NULL,"|");
+				if(id_peli != NULL){
+					if(strcmp(id_peli,"1")==0){
+						send(new_socket, "OK|1|Sala 1: 45/100 seients lliures\n",36,0);
+					}else if (strcmp(id_peli,"2")==0){
+						send(new_socket, "OK|2|Sala 2: 12/80 seients lliures\n",35,0);
+					}else if (strcmp(id_peli, "3")==0){
+						send(new_socket, "OK|3|Sala 3: 0/100 seients lliures (Agotat)\n",44,0);
+					}else if (strcmp(id_peli, "4")==0){
+						send(new_socket, "OK|4|Sala 4: 88/120 seients lliures\n",36,0);
+					}
+				}else {
+					send(new_socket, "ERR|Falta ID\n",13,0);
 				}
 			} 
 		}

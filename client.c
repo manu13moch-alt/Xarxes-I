@@ -227,6 +227,27 @@ int main(int argc, char *argv[]) {
 		}
 
 		case 4:
+			char id[50];
+			printf("Introdueix l'ID de la pel·lícula: ");
+			fflush(stdout);
+			scanf("%49s", id);
+			while (getchar()!='\n');
+
+			int request_length = snprintf (send_buffer,sizeof(send_buffer),"AFORAMENT|%s\n",id);
+			if(request_length <0 ||(size_t)request_length >= sizeof(send_buffer)||send_all(sock,send_buffer,(size_t)request_length)<0){
+				printf("Error en enviar dades al servidor \n");
+				close(sock);
+				return 1;
+			}
+
+			memset(buffer, 0, BUFFER_SIZE);
+  		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
+       			 printf("Resposta del servidor: %s\n", buffer);
+       			 fflush(stdout);
+    		} else {
+      			  printf("Error en rebre l'aforament.\n");
+       			 fflush(stdout);
+   				 }
 			
 			break;
 
