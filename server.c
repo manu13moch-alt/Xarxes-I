@@ -8,7 +8,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 51887
 #define BUFFER_SIZE 1024
 
 int main(int argc, char *argv[]) {

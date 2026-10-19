@@ -6,23 +6,9 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 51887
 #define DEFAULT_DOMAIN "localhost"
 #define BUFFER_SIZE 1024
-
-static int send_all(int sock, const char *data, size_t length) {
-	size_t sent_total = 0;
-
-	while (sent_total < length) {
-		ssize_t sent = send(sock, data + sent_total, length - sent_total, 0);
-		if (sent <= 0) {
-			return -1;
-		}
-		sent_total += (size_t)sent;
-	}
-
-	return 0;
-}
 
 int main(int argc, char *argv[]) {
 	int sock = 0;
@@ -108,7 +94,7 @@ int main(int argc, char *argv[]) {
 
 	while (1) {
 		memset(buffer, 0, sizeof(buffer)); // Netegem el buffer
-
+		memset(send_buffer, 0, sizeof(send_buffer));
 		// Menú principal
 		// Cal que implementeu un petit servei remot amb almenys 4 funcionalitats noves
 		// Definiu vosaltres mateixos les dades a enviar (demanar en el client, i analitzar al servidor) i rebre
@@ -148,8 +134,8 @@ int main(int argc, char *argv[]) {
 			// - cadena: és el punter a les dades que volem enviar.
 			// - strlen(cadena): és la mida exacta en bytes a enviar de cadena.
 
-			if (send_all(sock, cadena, strlen(cadena)) < 0 ||
-				send_all(sock, "\n", 1) < 0) {
+			if (send(sock, cadena, strlen(cadena), 0) != (ssize_t)strlen(cadena) ||
+				send(sock, "\n", 1, 0) != 1) {
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
 				return 1;
@@ -184,7 +170,7 @@ int main(int argc, char *argv[]) {
 			break;
 
 		case 2:
-			if (send_all(sock, "CARTELLERA\n", 11) < 0) {
+			if (send(sock, "CARTELLERA\n", 11, 0) != 11) {
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
 				return 1;
@@ -210,7 +196,7 @@ int main(int argc, char *argv[]) {
 			int request_length = snprintf(send_buffer, sizeof(send_buffer),
 				"HORARIS|%s\n", id);
 			if (request_length < 0 || (size_t)request_length >= sizeof(send_buffer) ||
-				send_all(sock, send_buffer, (size_t)request_length) < 0) {
+				send(sock, send_buffer, (size_t)request_length, 0) != request_length) {
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
 				return 1;
@@ -234,7 +220,7 @@ int main(int argc, char *argv[]) {
 			while (getchar()!='\n');
 
 			int request_length = snprintf (send_buffer,sizeof(send_buffer),"AFORAMENT|%s\n",id);
-			if(request_length <0 ||(size_t)request_length >= sizeof(send_buffer)||send_all(sock,send_buffer,(size_t)request_length)<0){
+			if(request_length <0 ||(size_t)request_length >= sizeof(send_buffer)||send(sock,send_buffer,(size_t)request_length,0) != request_length){
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
 				return 1;
@@ -273,7 +259,7 @@ int main(int argc, char *argv[]) {
 				"PREU|%s|%d\n", tipus_client, quantitat);
 			if (request_length < 0 ||
 				(size_t)request_length >= sizeof(send_buffer) ||
-				send_all(sock, send_buffer, (size_t)request_length) < 0) {
+				send(sock, send_buffer, (size_t)request_length, 0) != request_length) {
 				printf("Error en enviar dades al servidor.\n");
 				close(sock);
 				return 1;
