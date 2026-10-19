@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <signal.h>
 #include <time.h>
 
 #define DEFAULT_PORT 8080
@@ -13,12 +14,13 @@
 int main(int argc, char *argv[]) {
 	int sock, new_socket;
 	struct sockaddr_in address;
-	int addrlen = sizeof(address);
+	socklen_t addrlen;
 	char buffer[BUFFER_SIZE] = {0};
 	char send_buffer[BUFFER_SIZE] = {0};
 	int port;
 	char *endptr;
 	char *comando;
+	pid_t child_pid;
 
 	if (argc == 1) {
 		// Cap argument -> port per defecte
@@ -49,7 +51,7 @@ int main(int argc, char *argv[]) {
 	// - SOCK_STREAM: utilitza uns fluxes de dades fiables i orientats a la conexió, indica que utilitza el protocol TCP
 	// - 0: especifica que volem utilitzar el protocol predeterminat dels dos paràmetres anteriors, que en aquest cas es TCP
 	
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Error en crear el socket");
 		exit(EXIT_FAILURE);
 	}
@@ -99,7 +101,14 @@ int main(int argc, char *argv[]) {
 
 	printf("Servidor en funcionament, esperant connexions...\n");
 
-	while (1) {
+	// Els fills acabats són recollits automàticament per evitar processos zombis.
+	if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
+		perror("Error en configurar SIGCHLD");
+		close(sock);
+		exit(EXIT_FAILURE);
+	}
+
+		while (1) {
 		// Acceptar connexions de clients
 		// Afegiu comentari explicant els arguments i per què hi ha i cal new_socket si ja tenim sock
 		
@@ -113,11 +122,31 @@ int main(int argc, char *argv[]) {
 		// Son necessaries totes dues perquè new_socket s'utilitza per intercanviar dades amb el client actual i socket continua 
 		// escoltant i acceptant futurs clients.
 
-		if ((new_socket = accept(sock, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
+		addrlen = sizeof(address);
+		if ((new_socket = accept(sock, (struct sockaddr *)&address, &addrlen)) < 0) {
 			perror("Error en acceptar la connexió");
+			if (errno == EINTR) {
+				continue;
+			}
 			close(sock);
 			exit(EXIT_FAILURE);
 		}
+
+		child_pid = fork();
+		if (child_pid < 0) {
+			perror("Error en crear el procés fill");
+			close(new_socket);
+			continue;
+		}
+
+		if (child_pid > 0) {
+			// El pare només escolta; el fill s'encarrega d'aquest client.
+			close(new_socket);
+			continue;
+		}
+
+		// El fill no necessita el socket d'escolta, només el socket del client.
+		close(sock);
 
 		 while (1) {
 			memset(buffer, 0, BUFFER_SIZE);
@@ -139,43 +168,37 @@ int main(int argc, char *argv[]) {
 			char resposta [BUFFER_SIZE];
 			memset(resposta,0,sizeof(resposta));
 
-			if(strcmp(buffer,"EXIT")==0){
+			buffer[strcspn(buffer, "\r\n")] = 0;
+			if (strcmp(buffer, "EXIT") == 0) {
 				printf("Tancant conexió amb el client \n");
 				strcpy(resposta, "Connexió tancada pel servidor \n");
 				send(new_socket, resposta, strlen(resposta),0);
 				break;
 			} 
 			
-			// Comprovar si el client vol tancar la connexió
-			if (strcmp(buffer, "EXIT") == 0) {
-				printf("Tancant connexió amb el client (PID: %d)...\n", getpid());
-				send(new_socket, "Connexió tancada\n", strlen("Connexió tancada\n"), 0);
-				break;	// Sortir del bucle
-			} 
-
-			// nuevo
-			buffer[strcspn(buffer, "\r\n")] = 0; // Eliminar salt de línia final
 			comando = strtok(buffer, "|"); // Separar la cadena rebuda en comanda i arguments
 
 
-			if(strcmp(comando, "CARTELLERA")==0){  // Comprovar si la comanda és CARTELLERA
+			if (comando == NULL) {
+				continue;
+			} else if(strcmp(comando, "CARTELLERA")==0){  // Comprovar si la comanda és CARTELLERA
 				send(new_socket, "OK|1:Inception|2:Interstellar|3:Dark Knight|4:Avatar \n",64,0); // Enviar resposta al client 
 			} else if (strcmp(comando, "HORARIS")==0){ 
 				char *id_peli =strtok(NULL,"|"); // Obtenir l'argument de la comanda HORARIS
 				
-				if(strcmp(id_peli, "1") == 0){ // Comprovar si l'ID de la pel·lícula és vàlid
+				if (id_peli != NULL && strcmp(id_peli, "1") == 0){ // Comprovar si l'ID de la pel·lícula és vàlid
 					char resposta[BUFFER_SIZE];
         			snprintf(resposta, sizeof(resposta), "OK|1|16:00|19:30|22:00\n");
        				send(new_socket, resposta, strlen(resposta), 0);
-				}else if (strcmp(id_peli, "2") == 0) {
+				}else if (id_peli != NULL && strcmp(id_peli, "2") == 0) {
 					char resposta[BUFFER_SIZE];
         			snprintf(resposta, sizeof(resposta), "OK|2|16:00|18:30\n");
        				send(new_socket, resposta, strlen(resposta), 0);
-				} else if(strcmp(id_peli, "3") == 0) {
+				} else if(id_peli != NULL && strcmp(id_peli, "3") == 0) {
 					char resposta[BUFFER_SIZE];
         			snprintf(resposta, sizeof(resposta), "OK|3|16:00|20:00|23:00\n");
        				send(new_socket, resposta, strlen(resposta), 0);
-				} else if(strcmp(id_peli, "4") == 0) {
+				} else if(id_peli != NULL && strcmp(id_peli, "4") == 0) {
 					char resposta[BUFFER_SIZE];
         			snprintf(resposta, sizeof(resposta), "OK|4|19:30|22:00\n");
        				send(new_socket, resposta, strlen(resposta), 0);
@@ -233,6 +256,7 @@ int main(int argc, char *argv[]) {
 		
 
 		close(new_socket); // Tancar la connexió amb el client
+		_exit(EXIT_SUCCESS);
 	}
 
 	close(sock);
