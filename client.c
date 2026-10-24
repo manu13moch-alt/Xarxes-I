@@ -19,27 +19,30 @@ int main(int argc, char *argv[]) {
 	char *domini;
 	int port;
 	char *endptr;
+	long parsed_port;
 
 	if (argc == 1) {
 		// Cap argument -> valors per defecte
-		domini = DEFAULT_DOMAIN;
-		port = DEFAULT_PORT;
+		domini = DEFAULT_DOMAIN; // asignem la adreça del servidor per defecte Localhost
+		port = DEFAULT_PORT; // asignem el port del servidor per defecte 51887
 		printf("Cap argument indicat. Utilitzant valors per defecte: %s %d\n", domini, port);
 	} 
 	else if (argc == 3) {
-		domini = argv[1];
+		domini = argv[1]; // assignem la adreça del servidor que ens passa l'usuari
 
 		errno = 0;
-		port = strtol(argv[2], &endptr, 10);
+		parsed_port = strtol(argv[2], &endptr, 10);
 
 		// Comprovacions de validesa
-		if (errno != 0 || *endptr != '\0' || port < 1 || port > 65535) {
+		if (errno != 0 || endptr == argv[2] || *endptr != '\0' ||
+				parsed_port < 1 || parsed_port > 65535) {
 			fprintf(stderr, "Error: el port ha de ser un enter entre 1 i 65535.\n");
 			exit(EXIT_FAILURE);
 		}
+		port = (int)parsed_port;
 	} 
 	else {
-		fprintf(stderr, "Ús: %s [nom_de_domini port]\n", argv[0]);
+		fprintf(stderr, "Ús: %s [nom_de_domini port]\n", argv[0]); // Qualsevol altre combinació d'arguments és incorrecta, mostrem un missatge d'error i sortim del programa.
 		exit(EXIT_FAILURE);
 	}
 
@@ -48,15 +51,11 @@ int main(int argc, char *argv[]) {
 	// Crear el socket
 	// Afegiu comentari explicant els arguments, i de quines altres opcions hi ha
 	// per al segon d'ells (ara SOCK_STREAM)
-
-	sock=socket(AF_INET,SOCK_STREAM,0);
-
 	// - AF_INET: el que fa es indicar que el protocol que utilitzarem és IPv4
 	// - SOCK_STREAM: utilitza uns fluxes de dades fiables i orientats a la conexió, indica que utilitza el protocol TCP
 	// - 0: especifica que volem utilitzar el protocol predeterminat dels dos paràmetres anteriors, que en aquest cas es TCP
 	// - Una altre opció que podriem tenir per al segon argument es SOCK_DGRAM que aquest utilitza el protocol UDP que es més ràpid però 
 	// menys fiable i també hi ha SOCK_RAW que és per accedir directament a la interfície
-
 	
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		printf("\nError en crear el socket\n");
@@ -73,8 +72,12 @@ int main(int argc, char *argv[]) {
 	// - inet_pton(): el que fa es convertir una adreça IP escrita en format de text a binari de xarxa de 32 bits.
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(port);
-	inet_pton(AF_INET, domini, &serv_addr.sin_addr);	// Convertir adreça IPv4 a binari
+	serv_addr.sin_port = htons(port); 
+	if (inet_pton(AF_INET, domini, &serv_addr.sin_addr) != 1) {
+		fprintf(stderr, "Error: l'adreça IPv4 no és vàlida: %s\n", domini);
+		close(sock);
+		return EXIT_FAILURE;
+	}
    
 
 	// Connectar amb el servidor
@@ -94,7 +97,7 @@ int main(int argc, char *argv[]) {
 
 	while (1) {
 		memset(buffer, 0, sizeof(buffer)); // Netegem el buffer
-		memset(send_buffer, 0, sizeof(send_buffer));
+		memset(send_buffer, 0, sizeof(send_buffer)); 
 		// Menú principal
 		// Cal que implementeu un petit servei remot amb almenys 4 funcionalitats noves
 		// Definiu vosaltres mateixos les dades a enviar (demanar en el client, i analitzar al servidor) i rebre
@@ -133,6 +136,7 @@ int main(int argc, char *argv[]) {
 			// - sock: és el descriptor socket actiu connectat al servidor.
 			// - cadena: és el punter a les dades que volem enviar.
 			// - strlen(cadena): és la mida exacta en bytes a enviar de cadena.
+			// - 0: indica que no hi ha cap flag especial, només volem enviar les dades.
 
 			if (send(sock, cadena, strlen(cadena), 0) != (ssize_t)strlen(cadena) ||
 				send(sock, "\n", 1, 0) != 1) {
@@ -150,6 +154,7 @@ int main(int argc, char *argv[]) {
 			// - sock: és el descruptor socket actiu que ens envia les dades i d'on volem llegir-les.
 			// - buffer: és un punter al bloc de memòria on es guardaran les dades rebudes.
 			// - BUFFER_SIZE: és la mida màxima en bytes que accepta llegir.
+			// - 0: indica que no hi ha cap flag especial, només volem llegir les dades.
 
 			memset(buffer, 0, BUFFER_SIZE);
 			if(recv(sock, buffer, BUFFER_SIZE-1,0)<0){
@@ -169,7 +174,7 @@ int main(int argc, char *argv[]) {
 			}
 			break;
 
-		case 2:
+		case 2: // CONSULTA CARTELLERA
 			if (send(sock, "CARTELLERA\n", 11, 0) != 11) {
 				printf("Error en enviar dades al servidor \n");
 				close(sock);
@@ -178,16 +183,14 @@ int main(int argc, char *argv[]) {
 
 			memset(buffer, 0, BUFFER_SIZE);
   		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
-       			 printf("Resposta del servidor: %s\n", buffer);
-       			 fflush(stdout);
+       			printf("Resposta del servidor: %s\n", buffer);
     		} else {
-      			  printf("Error en rebre els horaris.\n");
-       			 fflush(stdout);
-   				 }
+      			printf("Error en rebre els horaris.\n");
+   				}
    			 break;
 	
 
-		case 3: {
+		case 3: { // CONSULTA HORARIS
 			char id[50];
 			printf("Introdueix l'ID de la pel·lícula: ");
 			scanf("%49s", id);
@@ -204,18 +207,15 @@ int main(int argc, char *argv[]) {
 			memset(buffer, 0, BUFFER_SIZE);
   		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
        			 printf("Resposta del servidor: %s\n", buffer);
-       			 fflush(stdout);
     		} else {
-      			  printf("Error en rebre els horaris.\n");
-       			 fflush(stdout);
+      			printf("Error en rebre els horaris.\n");
    				 }
 			break;
 		}
 
-		case 4:
+		case 4: // CONSULTA AFORAMENT
 			char id[50];
 			printf("Introdueix l'ID de la pel·lícula: ");
-			fflush(stdout);
 			scanf("%49s", id);
 			while (getchar()!='\n');
 
@@ -228,16 +228,14 @@ int main(int argc, char *argv[]) {
 
 			memset(buffer, 0, BUFFER_SIZE);
   		  	if (recv(sock, buffer, BUFFER_SIZE - 1, 0) > 0) {
-       			 printf("Resposta del servidor: %s\n", buffer);
-       			 fflush(stdout);
+       			printf("Resposta del servidor: %s\n", buffer);
     		} else {
-      			  printf("Error en rebre l'aforament.\n");
-       			 fflush(stdout);
-   				 }
+      			printf("Error en rebre l'aforament.\n");
+   				}
 			
 			break;
 
-		case 5: {
+		case 5: { // CONSULTA PREU
 			char tipus_client[50];
 			int quantitat;
 			int request_length;
@@ -280,6 +278,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	close(sock);
+	close(sock);// Tancar el socket abans de sortir del programa
 	return 0;
 }
