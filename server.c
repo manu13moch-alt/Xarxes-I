@@ -10,6 +10,7 @@
 
 #define DEFAULT_PORT 51887
 #define BUFFER_SIZE 1024
+#define MAX_CONNECTIONS 3
 
 int main(int argc, char *argv[]) {
 	int sock, new_socket;
@@ -28,10 +29,10 @@ int main(int argc, char *argv[]) {
 		printf("Cap port indicat. Utilitzant valor per defecte: %d\n", port);
 	}
 	else if (argc == 2) {
-		errno = 0;
+		errno = 0; 
 		port = strtol(argv[1], &endptr, 10);
 
-		// Comprovacions
+		// Comprovacions per veure que el port és un enter vàlid entre 1 i 65535
 		if (errno != 0 || *endptr != '\0' || port < 1 || port > 65535) {
 			fprintf(stderr, "Error: el port ha de ser un enter entre 1 i 65535.\n");
 			exit(EXIT_FAILURE);
@@ -46,7 +47,7 @@ int main(int argc, char *argv[]) {
 	// Crear el socket
 	// Afegiu comentari explicant els arguments
 	
-
+	// Creem el soket i comprovem si s'ha creat correctament, si no es així mostrem un missatge d'error i sortim del programa.
 	// - AF_INET: el que fa es indicar que el protocol que utilitzarem és IPv4
 	// - SOCK_STREAM: utilitza uns fluxes de dades fiables i orientats a la conexió, indica que utilitza el protocol TCP
 	// - 0: especifica que volem utilitzar el protocol predeterminat dels dos paràmetres anteriors, que en aquest cas es TCP
@@ -66,6 +67,7 @@ int main(int argc, char *argv[]) {
 	// - address.sin_port: ens diu el número exacte de port al que ens volem connectar.
 	// El que fa htons() es canviar l'ordre d'organització, normalment tenim un ordre Little-Endian i amb aquesta funció passa 
 	// a ser Big-Endian, ja que aquest es l'ordre estàndar i universal de la xarxa.
+	memset(&address, '0', sizeof(address));//Netejem l'estructura address per evitar valors aleatoris
 
 	address.sin_family = AF_INET;
 	address.sin_addr.s_addr = htonl(INADDR_ANY);	// Per a INADDR_ANY no faria falta htonl(), però li posem per coherència
@@ -89,11 +91,11 @@ int main(int argc, char *argv[]) {
 	// Escoltar connexions entrants
 	// Afegiu comentari explicant els arguments
 	
-	// - listen(): prepara el socket perquè pugui començar a rebre connexions del client
+	// - listen(): prepara el socket perquè pugui començar a rebre connexions del client, el posa en mode pasiu.
 	// - sock: es el sock que hem creat anteriorment.
-	// - 3: indica el número màxim de conexions entrants que es poden guardar a la cua.
+	// - MAX_CONNECTIONS: indica el número màxim de connexions entrants que es poden guardar a la cua.
 
-	if (listen(sock, 3) < 0) {
+	if (listen(sock, MAX_CONNECTIONS) < 0) {
 		perror("Error en escoltar");
 		close(sock);
 		exit(EXIT_FAILURE);
@@ -101,12 +103,6 @@ int main(int argc, char *argv[]) {
 
 	printf("Servidor en funcionament, esperant connexions...\n");
 
-	// Els fills acabats són recollits automàticament per evitar processos zombis.
-	if (signal(SIGCHLD, SIG_IGN) == SIG_ERR) {
-		perror("Error en configurar SIGCHLD");
-		close(sock);
-		exit(EXIT_FAILURE);
-	}
 
 		while (1) {
 		// Acceptar connexions de clients
@@ -131,9 +127,9 @@ int main(int argc, char *argv[]) {
 			close(sock);
 			exit(EXIT_FAILURE);
 		}
-
+		//Creem un procés fill per gestionar la connexió amb el client, així el pare pot continuar escoltant i acceptant nous clients.
 		child_pid = fork();
-		if (child_pid < 0) {
+		if (child_pid < 0) { // Si el fork() retorna un valor negatiu, vol dir que hi ha hagut un error en crear el procés fill, per tant mostrem un missatge d'error i tanquem el socket del client.
 			perror("Error en crear el procés fill");
 			close(new_socket);
 			continue;
@@ -152,13 +148,12 @@ int main(int argc, char *argv[]) {
 			memset(buffer, 0, BUFFER_SIZE);
 			
 			// Llegir missatge del client
+			// rebem el que hi ha al buffer del client, si no hi ha res o hi ha un error, sortim del bucle i tanquem la connexió amb el client.
+			// 0: indica que no hi ha cap flag especial, només volem llegir el missatge.
 			if (recv(new_socket, buffer, BUFFER_SIZE-1, 0) <= 0) {
 				printf("Client desconnectat (PID: %d)\n", getpid());
-				break;
+				break; // sortim del bucle per tancar la connexió amb el client
 			}
-
-			// Aquí haureu d'implementar l'anàlisi de la cadena rebuda per saber l'operació,
-			// i si n'hi ha els arguments, executar-la i tornar el(s) resultat(s)
 
 			// A continuació hi ha el codi corresponent a l'opció d'Enviar missatge, amb el retorn d'una cadena fixa,
 			// i la de Sortida de la connexió/bucle si és el cas.
@@ -175,12 +170,14 @@ int main(int argc, char *argv[]) {
 				send(new_socket, resposta, strlen(resposta),0);
 				break;
 			} 
-			
+			// Aquí haureu d'implementar l'anàlisi de la cadena rebuda per saber l'operació,
+			// i si n'hi ha els arguments, executar-la i tornar el(s) resultat(s)
+
 			comando = strtok(buffer, "|"); // Separar la cadena rebuda en comanda i arguments
 
 
 			if (comando == NULL) {
-				continue;
+				continue; // Si no hi ha cap comanda, tornem a esperar un missatge del client
 			} else if(strcmp(comando, "CARTELLERA")==0){  // Comprovar si la comanda és CARTELLERA
 				send(new_socket, "OK|1:Inception|2:Interstellar|3:Dark Knight|4:Avatar \n",64,0); // Enviar resposta al client 
 			} else if (strcmp(comando, "HORARIS")==0){ 
